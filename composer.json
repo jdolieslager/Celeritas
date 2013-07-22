@@ -1,0 +1,27 @@
+{
+    "name": "jdolieslager/celeritas",
+    "description": "ZF2 ClassCacher",
+    "license": "BSD-3-Clause",
+    "authors": [
+        {
+            "name": "Jesper Dolieslager",
+            "email": "jesper@flyingeagle.nl"
+        }
+    ],
+    "keywords": [
+        "zf2",
+        "classcacher",
+        "class",
+        "optimalization",
+        "speed"
+    ],
+    "minimum-stability": "beta",
+    "autoload" : {
+        "psr-0" : {
+            "Celeritas" : "src/"
+        }
+    },
+    "require": {
+      "zendframework/zendframework" : ">=2.2.1"
+    }
+}
