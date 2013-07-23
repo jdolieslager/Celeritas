@@ -18,6 +18,20 @@ class Cacher
     protected $config;
 
     /**
+     * Keep tracks which classes are be done
+     *
+     * @var array (<class> => <boolean>)
+     */
+    protected $classList = array();
+
+    /**
+     * Contains the class cache file handle
+     *
+     * @var resource
+     */
+    protected $handle;
+
+    /**
      * @var array
      */
     protected $exceptions = array(
@@ -74,42 +88,22 @@ class Cacher
         // We only want to cache classes once
         $classes = array_unique($classes);
 
+        $this->classList = array_flip($classes);
+        $this->classList = array_fill_keys($classes, false);
+
         // Open working file
-        $handle = fopen($this->getConfig()->getSwapFile(), 'w+');
+        $this->handle = fopen($this->getConfig()->getSwapFile(), 'w+');
 
         // Write PHP open tag
-        fwrite($handle, '<?php' . PHP_EOL);
+        fwrite($this->handle, '<?php' . PHP_EOL);
 
         // Walk through the classes
-        foreach ($classes as $index  => $class) {
-            $parts = explode('\\', $class);
-            if (count($parts) < 2) {
-                $namespace = '\\';
-            } else {
-                $class     = array_pop($parts);
-                $namespace = implode('\\', $parts);
-            }
-
-            // Check if we should skip this namespace
-            $skip = false;
-            foreach ($this->getConfig()->getIgnoreNamespaces() as $ignoreNamespace) {
-                if (strpos($namespace, $ignoreNamespace) === 0) {
-                    $skip = true;
-                    break;
-                }
-            }
-
-            // Should we skip the class??
-            if ($skip === true) {
-                continue;
-            }
-
-            // Write namespace to file
-            fwrite($handle, $this->buildNamespace($namespace, $class));
+        foreach ($this->classList as $class  => &$used) {
+            $this->processClassIntoCacheFile(new Reflection\ClassReflection($class));
         }
 
         // Close cache file handle
-        fclose($handle);
+        fclose($this->handle);
 
         // Minify cache file
         file_put_contents(
@@ -129,11 +123,10 @@ class Cacher
      * @return string the namespace + class + uses
      * @todo Detect defined constants
      */
-    protected function buildNamespace($namespace, $class)
+    protected function buildNamespace(Reflection\ClassReflection $class)
     {
-        $code  = "namespace {$namespace} {" . PHP_EOL;
+        $code  = "namespace {$class->getNamespaceName()} {" . PHP_EOL;
         $uses  = array();
-        $class = new Reflection\ClassReflection($namespace . '\\' . $class);
 
         // Reformat uses
         foreach ($class->getDeclaringFile()->getUses() as $use) {
@@ -156,7 +149,7 @@ class Cacher
         // Clear reflection memory
         \Zend\Code\Scanner\CachingFileScanner::clearCache();
 
-        return $code;
+        return fwrite($this->handle, $code);
     }
 
     /**
@@ -233,6 +226,9 @@ class Cacher
         if ($extendReflection !== false && $classNamespace) {
             $extendFullClassName = $extendReflection->getName();
 
+            // Make sure the class has already been cached
+            $this->processClassIntoCacheFile($extendReflection);
+
             // Check if the class has been defined in the uses
             if (array_key_exists($extendFullClassName, $uses)) {
                 // Set the use alias or the shortname when no alias has been set
@@ -252,6 +248,9 @@ class Cacher
 
             $code .= " extends {$extend}";
         } else if ($extendReflection !== false) {
+            // Make sure the class has already been cached
+            $this->processClassIntoCacheFile($extendReflection);
+
             // We're extending from the root namespace
             $code .= " extends \\{$extendReflection->getName()}";
         }
@@ -314,6 +313,9 @@ class Cacher
 
         // define interface names
         foreach ($interfaces as &$interface) {
+            // Make sure the class has already been cached
+            $this->processClassIntoCacheFile($interfaceReflections[$interface]);
+
             // Check if the interface has been defined in the uses
             if (array_key_exists($interface, $uses)) {
                 // Set the use alias or the shortname when no alias has been set
@@ -355,10 +357,60 @@ class Cacher
     }
 
     /**
+     * Makes several checks.
+     *
+     * 1. Exclude blacklisted namespaces
+     * 2. Exclude blacklisted classes
+     * 3. Skip Internal classes
+     *
+     * @param Reflection\ClassReflection $class
+     */
+    protected function processClassIntoCacheFile(Reflection\ClassReflection $class)
+    {
+        if ($this->classList[$class->getName()] === true) {
+            return;
+        }
+
+        if ($class->isInternal() === true) {
+            return;
+        }
+
+        // Make the string regex compactible
+        $excludeNamespaces = array_map(function($namespace) {
+            return str_replace('\\', '[\\\\]', $namespace);
+        }, $this->getConfig()->getIgnoreNamespaces());
+
+        // Make the regex
+        $excludeNamespaceRegex = '/^(' . implode('|', $excludeNamespaces) . ')(.*)/';
+
+        if (preg_match($excludeNamespaceRegex, $class->getName())) {
+            return;
+        }
+
+        $this->classList[$class->getName()] = true;
+        $this->buildNamespace($class);
+    }
+
+    /**
      * @return Entity\Settings
      */
     public function getConfig()
     {
         return $this->config;
+    }
+
+    /**
+     * Delete swap file
+     */
+    public function __destruct()
+    {
+        if ($this->handle === null) {
+            return;
+        }
+
+        // Destruct swap file if exists
+        if (is_file($this->getConfig()->getSwapFile())) {
+            unlink($this->getConfig()->getSwapFile());
+        }
     }
 }
