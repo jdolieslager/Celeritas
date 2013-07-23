@@ -13,8 +13,8 @@ array(
                                '.php',
         'ignore_namespaces' => array(
             'Celeritas',
-            'Composer\Autoload',
-            '\\',
+            'Composer',
+            'composer',
         ),
     ),
 );
