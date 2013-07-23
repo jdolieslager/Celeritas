@@ -25,7 +25,10 @@ array(
 ```php
 $applicationConfig = require 'config/application.config.php';
 
-if (is_file($applicationConfig['celeritas_options']['cache_file'])) {
+if (
+    $applicationConfig['celeritas_options']['enabled'] &&
+    is_file($applicationConfig['celeritas_options']['cache_file'])
+) {
     require_once $applicationConfig['celeritas_options']['cache_file'];
 }
 
@@ -38,5 +41,15 @@ Zend\Mvc\Application::init($applicationConfig)->run();
 
 **Note:** For development it is better to disable the caching mechanisme
 
+### Additional features
 
+1. Prevent class caching
+
+```php
+/** @var \Zend\Mvc\MvcEvent $mvcEvent */
+$eventManager = $mvcEvent->getTarget()->getEventManager();
+
+// No Cache
+$eventManager->trigger('celeritas.no_cache', $this, array());
+```
 
