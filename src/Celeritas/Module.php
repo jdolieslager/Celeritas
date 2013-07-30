@@ -71,6 +71,14 @@ class Module implements Feature\AutoloaderProviderInterface
             return;
         }
 
+        // Retrieve requested extension
+        $requestUri = $mvcEvent->getRequest()->getRequestUri();
+        $extension  = substr($requestUri, strrpos($requestUri, '.') + 1);
+
+        if (in_array($extension, $celeritasOptions['ignore_extensions'])) {
+            return;
+        }
+
         $settings = new Cacher\Entity\Settings();
         $settings->setFile($file)
             ->setSwapFile($swap)

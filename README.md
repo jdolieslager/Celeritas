@@ -11,10 +11,20 @@ array(
         'cache_file'        => __DIR__ . '/../data/cache/classcache/' .
                                md5(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH)) .
                                '.php',
+        // Those namespaces / full classnames will not be cached
         'ignore_namespaces' => array(
             'Celeritas',
             'Composer',
             'composer',
+        ),
+        // Those request extensions will be ignored. (Example: /img/bg.png or /css/app.css)
+        'ignore_extensions' => array(
+            'css',
+            'js',
+            'gif',
+            'png',
+            'jpg',
+            'ico',
         ),
     ),
 );
