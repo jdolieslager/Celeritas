@@ -78,6 +78,30 @@ class Cacher
      */
     public function cache()
     {
+        set_time_limit(120);
+
+        $swpLockFile = $this->getConfig()->getSwapFile() . '.lock';
+        if (is_file($swpLockFile)) {
+            return;
+        }
+
+        file_put_contents($swpLockFile, '');
+
+        // Open working file
+        if (is_file($this->getConfig()->getSwapFile()) === false) {
+            file_put_contents($this->getConfig()->getSwapFile(), '');
+        }
+
+        $this->handle = fopen($this->getConfig()->getSwapFile(), 'r+');
+
+        // Lock the file
+        if (flock($this->handle, LOCK_EX) === false) {
+            return;
+        }
+
+        // Clear the file
+        ftruncate($this->handle, 0);
+
         // Traits first, then interfaces at last the classes
         $classes = array_merge(
             get_declared_traits(),
@@ -91,8 +115,7 @@ class Cacher
         $this->classList = array_flip($classes);
         $this->classList = array_fill_keys($classes, false);
 
-        // Open working file
-        $this->handle = fopen($this->getConfig()->getSwapFile(), 'w+');
+
 
         // Write PHP open tag
         fwrite($this->handle, '<?php' . PHP_EOL);
@@ -101,6 +124,12 @@ class Cacher
         foreach ($this->classList as $class  => &$used) {
             $this->processClassIntoCacheFile(new Reflection\ClassReflection($class));
         }
+
+        // Flush last contents to the file
+        fflush($this->handle);
+
+        // Release the swap lock
+        flock($this->handle, LOCK_UN);
 
         // Close cache file handle
         fclose($this->handle);
@@ -111,8 +140,26 @@ class Cacher
             php_strip_whitespace($this->getConfig()->getSwapFile())
         );
 
+        $fileLock = $this->getConfig()->getFile() . '.lock';
+        file_put_contents($fileLock, '');
+
+        if (is_file($this->getConfig()->getFile())) {
+            unlink($this->getConfig()->getFile());
+        }
+
         // Replace old cache file
-        rename($this->getConfig()->getSwapFile(), $this->getConfig()->getFile());
+        copy($this->getConfig()->getSwapFile(), $this->getConfig()->getFile());
+
+        if (is_file($this->getConfig()->getSwapFile())) {
+            // Hotfix for Windows environments
+            if (@unlink($this->getConfig()->getSwapFile()) === false) {
+                unlink($this->getConfig()->getSwapFile());
+            }
+        }
+
+        // Unlink Locks
+        unlink($swpLockFile);
+        unlink($fileLock);
     }
 
     /**
@@ -402,7 +449,7 @@ class Cacher
     /**
      * Delete swap file
      */
-    public function __destruct()
+    public function __destrucsss()
     {
         if ($this->handle === null) {
             return;

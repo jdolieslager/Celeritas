@@ -58,15 +58,22 @@ class Module implements Feature\AutoloaderProviderInterface
             ->getServiceManager()->get('ApplicationConfig');
 
         $celeritasOptions = $applicationConfig['celeritas_options'];
+
         $file             = $celeritasOptions['cache_file'];
+        $fileLock         = $celeritasOptions['cache_file'] . '.lock';
         $swap             = $celeritasOptions['cache_file'] . '.swp';
+        $swapLock         = $celeritasOptions['cache_file'] . '.swp.lock';
+
+        clearstatcache();
 
         if (
             $this->generateCache === false ||
             $celeritasOptions['enabled'] === false ||
             $mvcEvent->getRequest() instanceof ConsoleRequest ||
             is_file($file) ||
-            is_file($swap)
+            is_file($fileLock) ||
+            is_file($swap) ||
+            is_file($swapLock)
         ) {
             return;
         }
